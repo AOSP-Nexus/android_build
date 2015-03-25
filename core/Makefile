@@ -210,6 +210,7 @@ endif
 			TARGET_CPU_ABI="$(TARGET_CPU_ABI)" \
 			TARGET_CPU_ABI2="$(TARGET_CPU_ABI2)" \
 			TARGET_AAPT_CHARACTERISTICS="$(TARGET_AAPT_CHARACTERISTICS)" \
+	$(PRODUCT_BUILD_PROP_OVERRIDES) \
 	        bash $(BUILDINFO_SH) >> $@
 	$(hide) $(foreach file,$(system_prop_file), \
 		if [ -f "$(file)" ]; then \
@@ -1461,8 +1462,8 @@ ifneq ($(OEM_THUMBPRINT_PROPERTIES),)
 	$(hide) echo "oem_fingerprint_properties=$(OEM_THUMBPRINT_PROPERTIES)" >> $(zip_root)/META/misc_info.txt
 endif
 	$(call generate-userimage-prop-dictionary, $(zip_root)/META/misc_info.txt)
-	$(hide) PATH=$(foreach p,$(INTERNAL_USERIMAGES_BINARY_PATHS),$(p):)$$PATH MKBOOTIMG=$(MKBOOTIMG) \
-	    ./build/tools/releasetools/make_recovery_patch $(zip_root) $(zip_root)
+	# $(hide) PATH=$(foreach p,$(INTERNAL_USERIMAGES_BINARY_PATHS),$(p):)$$PATH MKBOOTIMG=$(MKBOOTIMG) \
+	#     ./build/tools/releasetools/make_recovery_patch $(zip_root) $(zip_root)
 	@# Zip everything up, preserving symlinks
 	$(hide) (cd $(zip_root) && zip -qry ../$(notdir $@) .)
 	@# Run fs_config on all the system, vendor, boot ramdisk,
@@ -1494,9 +1495,9 @@ name := $(TARGET_PRODUCT)
 ifeq ($(TARGET_BUILD_TYPE),debug)
   name := $(name)_debug
 endif
-name := $(name)-ota-$(FILE_NAME_TAG)
+# name := $(name)-ota-$(FILE_NAME_TAG)
 
-INTERNAL_OTA_PACKAGE_TARGET := $(PRODUCT_OUT)/$(name).zip
+INTERNAL_OTA_PACKAGE_TARGET := $(PRODUCT_OUT)/$(name)-$(ROM-VERSION).zip
 
 $(INTERNAL_OTA_PACKAGE_TARGET): KEY_CERT_PAIR := $(DEFAULT_KEY_CERT_PAIR)
 
@@ -1505,13 +1506,27 @@ $(INTERNAL_OTA_PACKAGE_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(DISTTOOLS)
 	$(hide) PATH=$(foreach p,$(INTERNAL_USERIMAGES_BINARY_PATHS),$(p):)$$PATH MKBOOTIMG=$(MKBOOTIMG) \
 	   ./build/tools/releasetools/ota_from_target_files -v \
 	   --block \
+	   -no_prereq \
 	   -p $(HOST_OUT) \
 	   -k $(KEY_CERT_PAIR) \
 	   $(if $(OEM_OTA_CONFIG), -o $(OEM_OTA_CONFIG)) \
 	   $(BUILT_TARGET_FILES_PACKAGE) $@
 
-.PHONY: otapackage
+NEXUS_TARGET_PACKAGE := $(PRODUCT_OUT)/$(TARGET_PRODUCT)-$(ROM_VERSION).zip
+
+.PHONY: otapackage bacon
 otapackage: $(INTERNAL_OTA_PACKAGE_TARGET)
+bacon: otapackage
+ifneq ($(TARGET_CUSTOM_RELEASETOOL),)
+	$(hide) \
+	$(TARGET_CUSTOM_RELEASETOOL)
+endif
+ifneq ($(INTERNAL_OTA_PACKAGE_TARGET),$(NEXUS_TARGET_PACKAGE))
+	$(hide) ln -f $(INTERNAL_OTA_PACKAGE_TARGET) $(NEXUS_TARGET_PACKAGE)
+endif
+	$(hide) $(MD5SUM) $(NEXUS_TARGET_PACKAGE) > $(NEXUS_TARGET_PACKAGE).md5sum
+
+	@echo -e "Package Complete: $(NEXUS_TARGET_PACKAGE)"
 
 endif    # recovery_fstab is defined
 endif    # TARGET_NO_KERNEL != true

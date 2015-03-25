@@ -10,6 +10,7 @@ Invoke ". build/envsetup.sh" from your shell to add the following functions to y
            To limit the modules being built use the syntax: mmm dir/:target1,target2.
 - mma:     Builds all of the modules in the current directory, and their dependencies.
 - mmma:    Builds all of the modules in the supplied directories, and their dependencies.
+- mka:     Builds using SCHED_BATCH on all processors
 - cgrep:   Greps on all local C/C++ files.
 - ggrep:   Greps on all local Gradle files.
 - jgrep:   Greps on all local Java files.
@@ -67,6 +68,14 @@ function check_product()
         echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
         return
     fi
+
+    if (echo -n $1 | grep -q -e "^nexus_") ; then
+       NEXUS_BUILD=$(echo -n $1 | sed -e 's/^nexus_//g')
+    else
+       NEXUS_BUILD=
+    fi
+    export NEXUS_BUILD
+
         TARGET_PRODUCT=$1 \
         TARGET_BUILD_VARIANT= \
         TARGET_BUILD_TYPE= \
@@ -458,14 +467,6 @@ function add_lunch_combo()
     done
     LUNCH_MENU_CHOICES=(${LUNCH_MENU_CHOICES[@]} $new_combo)
 }
-
-# add the default one here
-add_lunch_combo aosp_arm-eng
-add_lunch_combo aosp_arm64-eng
-add_lunch_combo aosp_mips-eng
-add_lunch_combo aosp_mips64-eng
-add_lunch_combo aosp_x86-eng
-add_lunch_combo aosp_x86_64-eng
 
 function print_lunch_menu()
 {
@@ -1388,7 +1389,17 @@ function godir () {
     \cd $T/$pathname
 }
 
-# Force JAVA_HOME to point to java 1.7 if it isn't already set.
+function mka() {
+    case `uname -s` in
+        Darwin)
+            make -j `sysctl hw.ncpu|cut -d" " -f2` "$@"
+            ;;
+        *)
+            schedtool -B -n 1 -e ionice -n 1 make -j$(cat /proc/cpuinfo | grep "^processor" | wc -l) "$@"
+            ;;
+    esac
+}
+
 #
 # Note that the MacOS path for java 1.7 includes a minor revision number (sigh).
 # For some reason, installing the JDK doesn't make it show up in the
