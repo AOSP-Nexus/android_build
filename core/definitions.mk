@@ -2080,31 +2080,16 @@ define transform-prebuilt-to-target-strip-comments
 $(copy-file-to-target-strip-comments)
 endef
 
-###########################################################
-## On some platforms (MacOS), after copying a static
-## library, ranlib must be run to update an internal
-## timestamp!?!?!
-###########################################################
-
-ifeq ($(HOST_RUN_RANLIB_AFTER_COPYING),true)
-define transform-host-ranlib-copy-hack
-    $(hide) ranlib $@ || true
+# Copy a list of files/directories to target location, with sub dir structure preserved.
+# For example $(HOST_OUT_EXECUTABLES)/aapt -> $(staging)/bin/aapt .
+# $(1): the source list of files/directories.
+# $(2): the path prefix to strip. In the above example it would be $(HOST_OUT).
+# $(3): the target location.
+define copy-files-with-structure
+$(foreach t,$(1),\
+  $(eval s := $(patsubst $(2)%,%,$(t)))\
+  $(hide) mkdir -p $(dir $(3)/$(s)); cp -Rf $(t) $(3)/$(s)$(newline))
 endef
-else
-define transform-host-ranlib-copy-hack
-@true
-endef
-endif
-
-ifeq ($(TARGET_RUN_RANLIB_AFTER_COPYING),true)
-define transform-ranlib-copy-hack
-    $(hide) ranlib $@
-endef
-else
-define transform-ranlib-copy-hack
-@true
-endef
-endif
 
 
 ###########################################################
